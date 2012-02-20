@@ -62,6 +62,11 @@ module CarrierWave
     #     end
     #
     class Fog < Abstract
+      class << self
+        def connection_cache
+          @connection_cache ||= {}
+        end
+      end
 
       ##
       # Store a file
@@ -97,7 +102,8 @@ module CarrierWave
 
       def connection
         @connection ||= begin
-          ::Fog::Storage.new(uploader.fog_credentials)
+          credentials = uploader.fog_credentials
+          self.class.connection_cache[credentials] ||= ::Fog::Storage.new(credentials)
         end
       end
 
@@ -221,6 +227,17 @@ module CarrierWave
         def size
           file.content_length
         end
+        
+        ##
+        # Checks if file exists
+        #
+        # === Returns
+        #
+        # [Boolean] true if it exists or false
+        
+        def exists?
+          head.nil? == false
+        end
 
         ##
         # Write file to service
@@ -237,6 +254,7 @@ module CarrierWave
             :key          => path,
             :public       => @uploader.fog_public
           }.merge(@uploader.fog_attributes))
+          fog_file.close if fog_file && !fog_file.closed?
           true
         end
 
@@ -327,6 +345,17 @@ module CarrierWave
         #
         def file
           @file ||= directory.files.get(path)
+        end
+        
+        ##
+        # lookup file head
+        #
+        # === Returns
+        #
+        # [Fog::#{provider}::File] file data wrapper, body is retrieved on demand
+        #        
+        def head 
+          directory.files.head(path)
         end
 
       end
